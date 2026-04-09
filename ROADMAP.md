@@ -18,11 +18,10 @@ What's next for pnut, roughly in priority order.
 
 ### Supervision
 
-- **pidfd-based supervision** — use `CLONE_PIDFD` in clone3 for a race-free
-  process handle. Replace numeric PID waitpid with `pidfd_send_signal` +
-  epoll. The `pidfd` field already exists in our CloneArgs struct.
-- **PR_SET_CHILD_SUBREAPER** — set on supervisor so orphaned grandchildren
-  are reaped properly. Prevents zombie accumulation in PID namespace.
+- **PR_SET_CHILD_SUBREAPER** — reap orphaned grandchildren when `pid = false`
+  (no PID namespace). When `pid = true` (default), the kernel reparents orphans
+  to PID 1 inside the namespace. Needs careful design for library callers
+  where `waitpid(-1)` can steal unrelated children.
 
 ### Usability
 

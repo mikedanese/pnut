@@ -13,6 +13,7 @@ no_new_privs = true            # PR_SET_NO_NEW_PRIVS — block setuid/fscaps via
 # argv0 = "/bin/custom"       # Override argv[0] for the command
 # disable_tsc = false          # Disable RDTSC/RDTSCP (x86 only, causes SIGSEGV)
 # dumpable = false             # PR_SET_DUMPABLE — prevents ptrace and /proc/pid/mem access
+# forward_signals = true       # Forward signals to child (false = SIGKILL on any signal)
 
 [namespaces]
 user = true                    # User namespace — required for unprivileged mode

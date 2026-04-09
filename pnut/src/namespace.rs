@@ -6,6 +6,7 @@
 use crate::error::{Error, Stage};
 use nix::sys::signal::Signal;
 use nix::unistd::Pid;
+use std::os::fd::{FromRawFd, OwnedFd};
 
 /// Controls which Linux namespaces are created via `clone3` flags.
 ///
@@ -168,20 +169,32 @@ struct CloneArgs {
     tls: u64,
 }
 
+/// Result of a successful clone3 call in the parent.
+pub(crate) struct ChildHandle {
+    pub pid: Pid,
+    /// Process file descriptor for race-free signal delivery.
+    /// Returned by the kernel when `CLONE_PIDFD` is set.
+    pub pidfd: OwnedFd,
+}
+
 /// Create a new process via the clone3 syscall with the given namespace flags.
 ///
-/// Returns the child PID to the parent and `Pid::from_raw(0)` to the child.
+/// Uses `CLONE_PIDFD` to obtain a process file descriptor for race-free
+/// signal delivery via `pidfd_send_signal`.
+///
+/// Returns [`ChildHandle`] to the parent and `None` to the child.
 ///
 /// # Safety
 ///
 /// This is a thin wrapper around `SYS_clone3`. The caller must ensure that
 /// post-fork invariants are maintained (e.g., no multi-threaded forking hazards,
 /// proper pipe synchronization).
-pub(crate) fn do_clone3(flags: u64) -> Result<Pid, Error> {
+pub(crate) fn do_clone3(flags: u64) -> Result<Option<ChildHandle>, Error> {
+    let mut pidfd_raw: i32 = -1;
     let args = CloneArgs {
-        flags,
+        flags: flags | libc::CLONE_PIDFD as u64,
         exit_signal: Signal::SIGCHLD as u64,
-        pidfd: 0,
+        pidfd: &mut pidfd_raw as *mut i32 as u64,
         child_tid: 0,
         parent_tid: 0,
         stack: 0,
@@ -202,8 +215,21 @@ pub(crate) fn do_clone3(flags: u64) -> Result<Pid, Error> {
             source: std::io::Error::last_os_error(),
         })
     } else if ret == 0 {
-        Ok(Pid::from_raw(0))
+        // Child process.
+        Ok(None)
     } else {
-        Ok(Pid::from_raw(ret as i32))
+        // Parent process — wrap the pidfd.
+        if pidfd_raw < 0 {
+            return Err(Error::Setup {
+                stage: Stage::Clone,
+                context: "clone3 succeeded but CLONE_PIDFD did not return a valid fd".into(),
+                source: std::io::Error::from_raw_os_error(libc::EBADF),
+            });
+        }
+        let pidfd = unsafe { OwnedFd::from_raw_fd(pidfd_raw) };
+        Ok(Some(ChildHandle {
+            pid: Pid::from_raw(ret as i32),
+            pidfd,
+        }))
     }
 }

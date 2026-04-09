@@ -21,7 +21,7 @@ pnut = { path = "pnut", version = "0.1.0" }
 # Core
 libc = "0.2"
 thiserror = "2"
-nix = { version = "0.31", features = ["mount", "sched", "signal", "user", "process", "hostname", "resource", "net", "fs"] }
+nix = { version = "0.31", features = ["mount", "sched", "signal", "user", "process", "hostname", "resource", "net", "fs", "poll"] }
 
 # Dev
 tempfile = "3.27.0"

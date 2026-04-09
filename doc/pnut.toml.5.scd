@@ -60,6 +60,11 @@ General sandbox settings. All fields are optional.
 	Set PR_SET_DUMPABLE. When *false*, prevents same-UID ptrace and
 	*/proc/<pid>/mem* access from outside the sandbox. Default: *false*.
 
+*forward_signals* (bool)
+	Forward signals received by the supervisor to the sandboxed child.
+	When *false*, any signal to the supervisor kills the child with SIGKILL.
+	Only applies in *once* mode. Default: *true*.
+
 ## [namespaces]
 
 Controls which Linux namespaces are created. All fields are booleans.
