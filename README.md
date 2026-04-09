@@ -1,6 +1,6 @@
 # pnut
 
-*pnut* (pronounced "peanut") — a lightweight Linux sandbox that runs
+*pnut* (pronounced "peanut") is a lightweight Linux sandbox that runs
 entirely without root, setuid, or special capabilities.
 
 The name is a nod to [bubblewrap](https://github.com/containers/bubblewrap):
@@ -20,8 +20,8 @@ privileges, no setuid binaries, and no special capabilities required.
   namespaces via `clone3` or `unshare`.
 - **Filesystem confinement** — bind mounts, tmpfs overlays, `pivot_root`, and
   inline file content, all described declaratively in TOML.
-- **Seccomp-bpf** — a Kafel-inspired DSL for writing syscall filter policies
-  with argument matching, named policies, and composable `USE` directives.
+- **Seccomp-bpf** — Kafel DSL for writing syscall filter policies with argument
+  matching, named policies, and composable `USE` directives.
 - **Landlock** — LSM-based filesystem access control, restricting file access
   beyond what mount namespaces provide.
 - **Capability dropping** — all capabilities dropped by default, with explicit
@@ -38,8 +38,7 @@ bubblewrap is excellent. pnut explores a different point in the design space:
 - **Declarative TOML config** instead of long CLI flag chains.
 - **Deeper LSM integration** — seccomp-bpf policies as a first-class DSL,
   plus Landlock filesystem restrictions.
-- **Written in Rust** — memory safety without a runtime, raw syscalls where
-  needed.
+- **Written in Rust** — memory safety without a runtime.
 - **Two execution modes** — `clone3`-based (parent supervises child) and
   `unshare`+`execve` (caller becomes the sandbox).
 
@@ -73,12 +72,12 @@ mount = true
 
 [uid_map]
 inside = 0
-outside = 1000    # your UID
+outside = 1000    # replace with your UID (id -u)
 count = 1
 
 [gid_map]
 inside = 0
-outside = 1000    # your GID
+outside = 1000    # replace with your GID (id -g)
 count = 1
 ```
 
@@ -104,4 +103,4 @@ config, or the man pages (`pnut(1)` and `pnut.toml(5)`) for full documentation.
 
 ## License
 
-TODO
+Apache-2.0. See [LICENSE](LICENSE).
