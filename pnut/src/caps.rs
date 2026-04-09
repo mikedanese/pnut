@@ -1,34 +1,26 @@
 //! Capability dropping for the sandbox.
 
 use crate::error::Error;
-use std::collections::HashSet;
+
+pub use caps::Capability;
 
 /// Linux capabilities to keep after dropping all others.
 #[derive(Debug, Default)]
 pub struct Config {
-    pub keep: Vec<String>,
+    pub keep: Vec<Capability>,
 }
 
 impl Config {
     /// Keep one capability after dropping all others.
-    pub fn keep(&mut self, capability: impl Into<String>) -> &mut Self {
-        self.keep.push(capability.into());
+    pub fn keep(&mut self, capability: Capability) -> &mut Self {
+        self.keep.push(capability);
         self
     }
 }
 
 /// Apply capability restrictions: drop everything not in the keep list.
 pub(crate) fn apply_capabilities(config: &Config) -> Result<(), Error> {
-    let keep_set: HashSet<caps::Capability> = config
-        .keep
-        .iter()
-        .map(|name| {
-            name.parse::<caps::Capability>()
-                .expect("capability name already validated")
-        })
-        .collect();
-
-    let keep_caps: caps::CapsHashSet = keep_set.into_iter().collect();
+    let keep_caps: caps::CapsHashSet = config.keep.iter().copied().collect();
 
     caps::clear(None, caps::CapSet::Ambient).map_err(|e| {
         Error::Other(format!(

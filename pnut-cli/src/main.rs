@@ -428,9 +428,18 @@ struct CapabilitiesConfig {
     keep: Vec<String>,
 }
 
-impl From<CapabilitiesConfig> for pnut::caps::Config {
-    fn from(config: CapabilitiesConfig) -> Self {
-        Self { keep: config.keep }
+impl CapabilitiesConfig {
+    fn into_config(self) -> Result<pnut::caps::Config> {
+        let mut keep = Vec::with_capacity(self.keep.len());
+        for name in &self.keep {
+            let cap = name.parse::<pnut::caps::Capability>().map_err(|_| {
+                BuildError::InvalidConfig(format!(
+                    "invalid capability name '{name}'; expected CAP_NET_BIND_SERVICE, CAP_SYS_ADMIN, etc."
+                ))
+            })?;
+            keep.push(cap);
+        }
+        Ok(pnut::caps::Config { keep })
     }
 }
 
@@ -604,7 +613,7 @@ fn sandbox_from_config(config: SandboxConfig) -> Result<SandboxBuilder> {
         *builder.landlock() = config.into();
     }
     if let Some(config) = capabilities {
-        *builder.capabilities() = config.into();
+        *builder.capabilities() = config.into_config()?;
     }
     if let Some(config) = fd {
         *builder.fd() = config.into();

@@ -308,17 +308,6 @@ impl SandboxBuilder {
             }
         }
 
-        if let Some(caps_config) = self.capabilities.as_ref() {
-            for name in &caps_config.keep {
-                name.parse::<caps::Capability>().map_err(|_| {
-                    BuildError::InvalidConfig(format!(
-                        "invalid capability name '{}'; expected a Linux capability like CAP_NET_BIND_SERVICE, CAP_SYS_ADMIN, etc.",
-                        name
-                    ))
-                })?;
-            }
-        }
-
         if let Some(fd_config) = self.fd.as_ref() {
             let mut dst_set = std::collections::HashSet::new();
             for m in &fd_config.mappings {
