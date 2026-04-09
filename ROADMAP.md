@@ -6,15 +6,15 @@ What's next for pnut, roughly in priority order.
 
 - **Man page installation** — `pnut(1)` and `pnut.toml(5)` are written (scdoc
   source in `doc/`); need an install story (`make install` or similar).
+- **Landlock port ranges** — `allowed_bind` and `allowed_connect` currently
+  take single ports only. Support range syntax (e.g. `"8000-8999"`) expanded
+  to individual `NetPort` rules.
 
 ## Next
 
 ### Hardening
 
-- **Landlock ABI V2–V5** — currently hardcoded to ABI V1. Feature-detect the
-  kernel's ABI and opportunistically enable: rename/link control (V2, 5.19),
-  truncation control (V3, 6.2), TCP port policy (V4, 6.7), device ioctl
-  mediation (V5, 6.10). The `landlock` crate already supports ABI negotiation.
+- **Landlock ABI 6+** — abstract unix socket and signal scoping (6.12+).
 
 ### Supervision
 
@@ -43,10 +43,6 @@ What's next for pnut, roughly in priority order.
 
 - **PR_SET_MDWE** — opt-in W^X enforcement (6.3+). Deny write+execute
   mappings. Breaks JIT workloads, so must be opt-in.
-- **Landlock TCP port policy** — with ABI V4, unprivileged per-port
-  bind/connect allowlists without requiring full network namespace or
-  privileged veth setup.
-- **Landlock ABI 6+** — abstract unix socket and signal scoping (6.12+).
 - **mseal(2)** — opt-in memory sealing (6.10+). Prevent VMA manipulation
   after setup.
 - **New mount API** — `fsopen`/`fsconfig`/`fsmount` for TOCTOU-free VFS
