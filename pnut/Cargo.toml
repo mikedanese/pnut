@@ -16,7 +16,7 @@ path = "src/lib.rs"
 
 [dependencies]
 kafel = { workspace = true }
-pnut-child = { path = "../pnut-child", version = "0.1.2" }
+pnut-child = { path = "../pnut-child", version = "0.2.0" }
 thiserror = { workspace = true }
 nix = { workspace = true }
 libc = { workspace = true }

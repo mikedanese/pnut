@@ -4,7 +4,7 @@ default-members = ["kafel", "pnut", "pnut-child", "pnut-cli"]
 resolver = "3"
 
 [workspace.package]
-version = "0.1.2"
+version = "0.2.0"
 edition = "2024"
 license = "Apache-2.0"
 readme = "README.md"
@@ -15,8 +15,8 @@ keywords = ["sandbox", "seccomp", "namespaces", "linux", "container"]
 
 [workspace.dependencies]
 # Internal crates
-kafel = { path = "kafel", version = "0.1.1" }
-pnut = { path = "pnut", version = "0.1.2" }
+kafel = { path = "kafel", version = "0.2.0" }
+pnut = { path = "pnut", version = "0.2.0" }
 
 # Core
 libc = "0.2"

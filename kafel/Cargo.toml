@@ -1,7 +1,7 @@
 [package]
 name = "kafel"
 description = "Seccomp-bpf policy compiler — Kafel DSL to BPF bytecode"
-version = "0.1.1"
+version = "0.2.0"
 edition = { workspace = true }
 license = { workspace = true }
 readme = "README.md"
