@@ -5,7 +5,7 @@
 .nh
 .ad l
 .\" Begin generated content:
-.TH "pnut.toml" "5" "2026-04-09"
+.TH "pnut.toml" "5" "2026-04-10"
 .P
 .SH NAME
 .P
@@ -94,6 +94,14 @@ Set PR_SET_DUMPABLE.\& When \fBfalse\fR, prevents same-UID ptrace and
 Forward signals received by the supervisor to the sandboxed child.\&
 When \fBfalse\fR, any signal to the supervisor kills the child with SIGKILL.\&
 Only applies in \fBonce\fR mode.\& Default: \fBtrue\fR.\&
+.P
+.RE
+\fBmdwe\fR (bool)
+.RS 4
+Set PR_SET_MDWE (Memory-Deny-Write-Execute).\& Denies creating writable
+and executable mappings simultaneously, and converting writable mappings
+to executable.\& Breaks JIT workloads (V8, LuaJIT, etc.\&).\& Requires
+kernel >= 6.\&3.\& Default: \fBfalse\fR.\&
 .P
 .RE
 .SS [namespaces]
