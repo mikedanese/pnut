@@ -25,7 +25,7 @@ fn undefined_syscall_in_policy() {
         "POLICY p { ALLOW { this_is_a_syscall_that_does_not_exist } } USE p DEFAULT KILL",
     );
     assert!(
-        matches!(err, Error::UnknownSyscall { ref name } if name == "this_is_a_syscall_that_does_not_exist"),
+        matches!(err, Error::UnknownSyscall { ref name, .. } if name == "this_is_a_syscall_that_does_not_exist"),
         "expected UnknownSyscall, got {err}"
     );
 }
@@ -47,7 +47,7 @@ fn undefined_syscall_in_inline_policy() {
 fn undefined_policy_in_use() {
     let err = compile_err("USE undef DEFAULT KILL");
     assert!(
-        matches!(err, Error::UndefinedPolicy { ref name } if name == "undef"),
+        matches!(err, Error::UndefinedPolicy { ref name, .. } if name == "undef"),
         "expected UndefinedPolicy, got {err}"
     );
 }
@@ -56,7 +56,7 @@ fn undefined_policy_in_use() {
 fn undefined_policy_with_other_defined() {
     let err = compile_err("POLICY empty {} USE undef DEFAULT KILL");
     assert!(
-        matches!(err, Error::UndefinedPolicy { ref name } if name == "undef"),
+        matches!(err, Error::UndefinedPolicy { ref name, .. } if name == "undef"),
         "expected UndefinedPolicy, got {err}"
     );
 }
@@ -65,7 +65,7 @@ fn undefined_policy_with_other_defined() {
 fn undefined_policy_in_nested_use() {
     let err = compile_err("POLICY broken { USE undef } USE broken DEFAULT KILL");
     assert!(
-        matches!(err, Error::UndefinedPolicy { ref name } if name == "undef"),
+        matches!(err, Error::UndefinedPolicy { ref name, .. } if name == "undef"),
         "expected UndefinedPolicy, got {err}"
     );
 }
@@ -78,7 +78,7 @@ fn undefined_policy_in_nested_use() {
 fn too_many_syscall_args() {
     let err = compile_err("POLICY p { ALLOW { write(a, b, c, d, e, f, g) } } USE p DEFAULT KILL");
     assert!(
-        matches!(err, Error::Parse { ref message } if message.contains("7 arguments")),
+        matches!(err, Error::Parse { ref message, .. } if message.contains("7 arguments")),
         "expected ParseError about too many args, got {err}"
     );
 }

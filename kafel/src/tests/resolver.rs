@@ -154,7 +154,7 @@ fn adversarial_undeclared_arg_in_masked_expr() {
     "#;
     let err = parse_and_resolve(input).unwrap_err();
     match &err {
-        Error::UndeclaredArgument { name, syscall } => {
+        Error::UndeclaredArgument { name, syscall, .. } => {
             assert_eq!(name, "unknown_arg");
             assert_eq!(syscall, "write");
         }

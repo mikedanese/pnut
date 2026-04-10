@@ -99,7 +99,7 @@ fn removed_builtin_names_fail() {
         let policy = format!("USE {name} DEFAULT KILL");
         let err = kafel::compile_with_options(&policy, &builtin_options()).unwrap_err();
         match err {
-            Error::UndefinedPolicy { name: missing } => assert_eq!(missing, name),
+            Error::UndefinedPolicy { name: missing, .. } => assert_eq!(missing, name),
             other => panic!("expected undefined policy for {name}, got {other:?}"),
         }
     }

@@ -40,6 +40,25 @@ use crate::error::Error;
 #[grammar = "policy.pest"]
 struct SeccompParser;
 
+/// Convert a pest `Pair`'s span into our own [`Span`] type.
+fn span_of(pair: &pest::iterators::Pair<Rule>) -> Span {
+    let s = pair.as_span();
+    Span::new(s.start() as u32, s.end() as u32)
+}
+
+/// Convert a pest parse error into `Error::Parse`, capturing the byte span
+/// of the offending location so diagnostics can render a source snippet.
+fn pest_to_parse_error(err: pest::error::Error<Rule>) -> Error {
+    let span = match err.location {
+        pest::error::InputLocation::Pos(p) => Some(Span::new(p as u32, p as u32 + 1)),
+        pest::error::InputLocation::Span((s, e)) => Some(Span::new(s as u32, e as u32)),
+    };
+    Error::Parse {
+        message: err.variant.message().to_string(),
+        span,
+    }
+}
+
 /// Parse and validate a seccomp policy string.
 ///
 /// Parses the DSL into an AST and checks for structural errors:
@@ -50,9 +69,7 @@ struct SeccompParser;
 /// Returns the validated `PolicyFile` AST.
 #[cfg(test)]
 pub fn parse_and_validate(input: &str) -> Result<PolicyFile, Error> {
-    let policy_file = parse_policy(input).map_err(|e| Error::Parse {
-        message: e.to_string(),
-    })?;
+    let policy_file = parse_policy(input).map_err(pest_to_parse_error)?;
     validate_policy(&policy_file)?;
     Ok(policy_file)
 }
@@ -74,13 +91,15 @@ pub fn parse_with_includes(
     depth: usize,
     parent_filename: Option<&str>,
 ) -> Result<PolicyFile, Error> {
-    let mut policy_file = parse_policy(input).map_err(|e| Error::Parse {
-        message: e.to_string(),
-    })?;
+    let mut policy_file = parse_policy(input).map_err(pest_to_parse_error)?;
 
     // Process include directives
-    let includes = std::mem::take(&mut policy_file.include_directives);
-    for filename in includes {
+    let includes = std::mem::take(&mut policy_file.includes);
+    for Include {
+        filename,
+        span: directive_span,
+    } in includes
+    {
         // Check depth limit
         if depth >= options.max_include_depth {
             return Err(Error::IncludeDepthExceeded);
@@ -90,6 +109,7 @@ pub fn parse_with_includes(
         if !seen_includes.insert(filename.clone()) {
             return Err(Error::CircularInclude {
                 filename: filename.clone(),
+                span: Some(directive_span),
             });
         }
 
@@ -99,11 +119,26 @@ pub fn parse_with_includes(
             .as_ref()
             .ok_or_else(|| Error::IncludeNotFound {
                 filename: filename.clone(),
+                span: Some(directive_span),
             })?;
         let ctx = crate::codegen::IncludeContext {
             parent: parent_filename,
         };
-        let result = resolver(&filename, &ctx)?;
+        // If the resolver returned IncludeNotFound without a span, attach the
+        // current directive's span so downstream diagnostics can point at it.
+        let result = match resolver(&filename, &ctx) {
+            Ok(r) => r,
+            Err(Error::IncludeNotFound {
+                filename,
+                span: None,
+            }) => {
+                return Err(Error::IncludeNotFound {
+                    filename,
+                    span: Some(directive_span),
+                });
+            }
+            Err(e) => return Err(e),
+        };
 
         // Use canonical name if provided, otherwise fall back to raw filename.
         let effective_name = result.canonical_name.as_deref().unwrap_or(&filename);
@@ -157,13 +192,17 @@ fn validate_policy(pf: &PolicyFile) -> Result<(), Error> {
                                     rule.name,
                                     rule.args.len()
                                 ),
+                                span: Some(rule.name_span),
                             });
                         }
                     }
                 }
-                PolicyEntry::UseRef(name) => {
+                PolicyEntry::UseRef(name, span) => {
                     if !defined_names.contains(&name.as_str()) {
-                        return Err(Error::UndefinedPolicy { name: name.clone() });
+                        return Err(Error::UndefinedPolicy {
+                            name: name.clone(),
+                            span: Some(*span),
+                        });
                     }
                 }
             }
@@ -171,9 +210,12 @@ fn validate_policy(pf: &PolicyFile) -> Result<(), Error> {
     }
 
     if let Some(ref use_stmt) = pf.use_stmt {
-        for name in &use_stmt.policies {
+        for (name, span) in &use_stmt.policies {
             if !defined_names.contains(&name.as_str()) {
-                return Err(Error::UndefinedPolicy { name: name.clone() });
+                return Err(Error::UndefinedPolicy {
+                    name: name.clone(),
+                    span: Some(*span),
+                });
             }
         }
     }
@@ -189,11 +231,12 @@ fn parse_policy(input: &str) -> Result<PolicyFile, pest::error::Error<Rule>> {
     for pair in pairs.into_iter().next().unwrap().into_inner() {
         match pair.as_rule() {
             Rule::include_directive => {
+                let span = span_of(&pair);
                 let string_lit = pair.into_inner().next().unwrap();
                 // Strip the surrounding quotes from the string literal
                 let raw = string_lit.as_str();
                 let filename = raw[1..raw.len() - 1].to_string();
-                policy_file.include_directives.push(filename);
+                policy_file.includes.push(Include { filename, span });
             }
             Rule::define => {
                 let mut inner = pair.into_inner();
@@ -226,8 +269,10 @@ fn parse_policy_block(pair: pest::iterators::Pair<Rule>) -> Policy {
                 entries.push(PolicyEntry::ActionBlock(parse_action_block(item)));
             }
             Rule::use_ref => {
-                let policy_name = item.into_inner().next().unwrap().as_str().to_string();
-                entries.push(PolicyEntry::UseRef(policy_name));
+                let name_pair = item.into_inner().next().unwrap();
+                let name_span = span_of(&name_pair);
+                let policy_name = name_pair.as_str().to_string();
+                entries.push(PolicyEntry::UseRef(policy_name, name_span));
             }
             _ => {}
         }
@@ -279,7 +324,9 @@ fn parse_action(pair: pest::iterators::Pair<Rule>) -> Action {
 
 fn parse_syscall_entry(pair: pest::iterators::Pair<Rule>) -> SyscallRule {
     let mut inner = pair.into_inner();
-    let name = inner.next().unwrap().as_str().to_string();
+    let name_pair = inner.next().unwrap();
+    let name_span = span_of(&name_pair);
+    let name = name_pair.as_str().to_string();
     let mut args = Vec::new();
     let mut filter = None;
 
@@ -295,7 +342,12 @@ fn parse_syscall_entry(pair: pest::iterators::Pair<Rule>) -> SyscallRule {
         }
     }
 
-    SyscallRule { name, args, filter }
+    SyscallRule {
+        name,
+        name_span,
+        args,
+        filter,
+    }
 }
 
 fn parse_bool_expr(pair: pest::iterators::Pair<Rule>) -> BoolExpr {
@@ -365,11 +417,16 @@ fn parse_cmp_lhs(pair: pest::iterators::Pair<Rule>) -> CmpLhs {
     match inner.as_rule() {
         Rule::masked_expr => {
             let mut parts = inner.into_inner();
-            let name = parts.next().unwrap().as_str().to_string();
+            let name_pair = parts.next().unwrap();
+            let name_span = span_of(&name_pair);
+            let name = name_pair.as_str().to_string();
             let mask = parse_expr(parts.next().unwrap());
-            CmpLhs::Masked(name, mask)
+            CmpLhs::Masked(name, name_span, mask)
         }
-        Rule::ident => CmpLhs::Arg(inner.as_str().to_string()),
+        Rule::ident => {
+            let name_span = span_of(&inner);
+            CmpLhs::Arg(inner.as_str().to_string(), name_span)
+        }
         other => unreachable!("unexpected cmp_lhs child: {:?}", other),
     }
 }
@@ -399,7 +456,10 @@ fn parse_expr_atom(pair: pest::iterators::Pair<Rule>) -> Expr {
     let inner = pair.into_inner().next().unwrap();
     match inner.as_rule() {
         Rule::number => Expr::Number(parse_number(inner.as_str())),
-        Rule::ident => Expr::Ident(inner.as_str().to_string()),
+        Rule::ident => {
+            let span = span_of(&inner);
+            Expr::Ident(inner.as_str().to_string(), span)
+        }
         Rule::expr => parse_expr(inner),
         _ => unreachable!("unexpected atom child: {:?}", inner.as_rule()),
     }
@@ -425,7 +485,10 @@ fn parse_use_stmt(pair: pest::iterators::Pair<Rule>) -> UseStmt {
     loop {
         let next = inner.next().unwrap();
         match next.as_rule() {
-            Rule::ident => policies.push(next.as_str().to_string()),
+            Rule::ident => {
+                let span = span_of(&next);
+                policies.push((next.as_str().to_string(), span));
+            }
             Rule::action => {
                 return UseStmt {
                     policies,
@@ -543,7 +606,7 @@ mod tests {
         }
         if let PolicyEntry::ActionBlock(ab) = &pf.policies[0].entries[1] {
             match &ab.action {
-                Action::Errno(Expr::Ident(name)) => assert_eq!(name, "EPERM"),
+                Action::Errno(Expr::Ident(name, _)) => assert_eq!(name, "EPERM"),
                 other => panic!("expected symbolic ERRNO action, got {other:?}"),
             }
         }
@@ -566,7 +629,7 @@ mod tests {
             let rule = &ab.rules[0];
             assert_eq!(rule.name, "mmap");
             match rule.filter.as_ref().unwrap() {
-                BoolExpr::Compare(CmpLhs::Masked(name, _mask), CmpOp::Eq, _) => {
+                BoolExpr::Compare(CmpLhs::Masked(name, _, _mask), CmpOp::Eq, _) => {
                     assert_eq!(name, "prot");
                 }
                 other => panic!("expected masked comparison, got {other:?}"),
@@ -652,8 +715,8 @@ mod tests {
         assert_eq!(pf.policies.len(), 3);
         let main = &pf.policies[2];
         assert_eq!(main.name, "main");
-        assert!(matches!(&main.entries[0], PolicyEntry::UseRef(n) if n == "read_stdio"));
-        assert!(matches!(&main.entries[1], PolicyEntry::UseRef(n) if n == "write_stdio"));
+        assert!(matches!(&main.entries[0], PolicyEntry::UseRef(n, _) if n == "read_stdio"));
+        assert!(matches!(&main.entries[1], PolicyEntry::UseRef(n, _) if n == "write_stdio"));
     }
 
     #[test]

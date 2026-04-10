@@ -50,9 +50,11 @@ impl FilesystemResolver {
             .canonicalize()
             .map_err(|_| Error::IncludeNotFound {
                 filename: filename.to_string(),
+                span: None,
             })?;
         let contents = std::fs::read_to_string(&canonical).map_err(|_| Error::IncludeNotFound {
             filename: filename.to_string(),
+            span: None,
         })?;
         Ok(IncludeResult {
             contents,

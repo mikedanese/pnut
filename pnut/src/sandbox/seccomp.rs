@@ -13,7 +13,7 @@ pub(crate) fn prepare_program(
 
     match source {
         Some(SeccompSource::Inline(policy_text)) => {
-            compile_policy(policy_text, None, need_userns_block)
+            compile_policy(policy_text, None, None, need_userns_block)
         }
         Some(SeccompSource::File(policy_path)) => {
             let contents =
@@ -22,7 +22,13 @@ pub(crate) fn prepare_program(
                     source: e,
                 })?;
             let base_dir = policy_path.parent().unwrap_or(Path::new("."));
-            compile_policy(&contents, Some(base_dir), need_userns_block)
+            let filename = policy_path.display().to_string();
+            compile_policy(
+                &contents,
+                Some(base_dir),
+                Some(filename.as_str()),
+                need_userns_block,
+            )
         }
         None if need_userns_block => {
             // No user policy, but we still need a filter to block nested namespaces.
@@ -52,6 +58,7 @@ const UNSAFE_NS_FLAGS: u64 = libc::CLONE_NEWNS as u64
 fn compile_policy(
     policy_text: &str,
     base_dir: Option<&Path>,
+    filename: Option<&str>,
     block_nested_userns: bool,
 ) -> std::result::Result<Option<kafel::BpfProgram>, BuildError> {
     let mut options = kafel::CompileOptions::new().with_prelude(kafel::BUILTIN_PRELUDE);
@@ -61,16 +68,20 @@ fn compile_policy(
         options = options.with_include_resolver(move |name, ctx| resolver.resolve(name, ctx));
     }
 
-    let mut policy = kafel::parse_policy(policy_text, &options)
-        .map_err(|e| BuildError::SeccompCompile(e.to_string()))?;
+    // Render any kafel error with a source snippet so the user sees where
+    // in their policy file the problem is, not just a one-line message.
+    let render = |e: kafel::Error| -> BuildError {
+        BuildError::SeccompCompile(kafel::render_diagnostic(&e, policy_text, filename))
+    };
+
+    let mut policy = kafel::parse_policy(policy_text, &options).map_err(render)?;
 
     // pnut installs the seccomp filter before execve and chdir, so these
     // must always be allowed. Runtime startup syscalls (set_tid_address,
     // mprotect, etc.) are the user's responsibility via allow_static_startup
     // or allow_dynamic_startup in the policy.
     for name in ["execve", "execveat", "chdir"] {
-        let nr =
-            kafel::resolve_syscall(name).map_err(|e| BuildError::SeccompCompile(e.to_string()))?;
+        let nr = kafel::resolve_syscall(name).map_err(render)?;
         policy.add_entry(kafel::PolicyEntry {
             syscall_number: nr,
             action: kafel::Action::Allow,
@@ -83,10 +94,7 @@ fn compile_policy(
         inject_userns_deny(&mut policy)?;
     }
 
-    policy
-        .codegen()
-        .map(Some)
-        .map_err(|e| BuildError::SeccompCompile(e.to_string()))
+    policy.codegen().map(Some).map_err(render)
 }
 
 /// Inject seccomp rules to deny nested namespace creation.
@@ -132,7 +140,7 @@ mod tests {
     #[test]
     fn compile_inline_policy_with_typed_api() {
         let policy_text = "POLICY p { ALLOW { read, write } }\nUSE p DEFAULT KILL\n";
-        let result = compile_policy(policy_text, None, false);
+        let result = compile_policy(policy_text, None, None, false);
         assert!(result.is_ok(), "compile_policy failed: {result:?}");
         assert!(result.unwrap().is_some());
     }

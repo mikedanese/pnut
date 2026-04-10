@@ -21,6 +21,7 @@ fn include_compiles() {
             .map(Into::into)
             .ok_or_else(|| kafel::Error::IncludeNotFound {
                 filename: name.to_string(),
+                span: None,
             })
     });
 
@@ -36,6 +37,7 @@ fn include_merges_defines() {
         "constants.policy" => Ok("#define MY_FD 1".to_string().into()),
         _ => Err(kafel::Error::IncludeNotFound {
             filename: name.to_string(),
+            span: None,
         }),
     });
 
@@ -55,6 +57,7 @@ fn include_defines_visible_in_filter() {
         "consts.policy" => Ok("#define MY_FD 42".to_string().into()),
         _ => Err(kafel::Error::IncludeNotFound {
             filename: name.to_string(),
+            span: None,
         }),
     });
 
@@ -76,6 +79,7 @@ fn include_policies_usable() {
             .into()),
         _ => Err(kafel::Error::IncludeNotFound {
             filename: name.to_string(),
+            span: None,
         }),
     });
 
@@ -97,6 +101,7 @@ fn multi_level_include() {
         "io.policy" => Ok("POLICY io { ALLOW { read, write } }".to_string().into()),
         _ => Err(kafel::Error::IncludeNotFound {
             filename: name.to_string(),
+            span: None,
         }),
     });
 
@@ -133,6 +138,7 @@ fn prelude_and_include_combined() {
             ),
             _ => Err(kafel::Error::IncludeNotFound {
                 filename: name.to_string(),
+                span: None,
             }),
         });
 
@@ -241,6 +247,7 @@ fn include_depth_exactly_at_limit() {
             "c.policy" => Ok("POLICY leaf { ALLOW { read } }".to_string().into()),
             _ => Err(kafel::Error::IncludeNotFound {
                 filename: name.to_string(),
+                span: None,
             }),
         });
 
@@ -267,6 +274,7 @@ fn circular_include() {
             .into()),
         _ => Err(kafel::Error::IncludeNotFound {
             filename: name.to_string(),
+            span: None,
         }),
     });
 
@@ -285,6 +293,7 @@ fn self_include() {
             .into()),
         _ => Err(kafel::Error::IncludeNotFound {
             filename: name.to_string(),
+            span: None,
         }),
     });
 
@@ -303,6 +312,7 @@ fn three_way_circular_include() {
         "c.policy" => Ok("#include \"a.policy\"".to_string().into()),
         _ => Err(kafel::Error::IncludeNotFound {
             filename: name.to_string(),
+            span: None,
         }),
     });
 
@@ -334,6 +344,7 @@ fn resolver_error_propagation() {
     let opts = kafel::CompileOptions::new().with_include_resolver(|name, _ctx| {
         Err(kafel::Error::IncludeNotFound {
             filename: name.to_string(),
+            span: None,
         })
     });
 
@@ -342,7 +353,7 @@ fn resolver_error_propagation() {
         &opts,
     );
     match result {
-        Err(kafel::Error::IncludeNotFound { filename }) => {
+        Err(kafel::Error::IncludeNotFound { filename, .. }) => {
             assert_eq!(filename, "missing.policy");
         }
         other => panic!("expected IncludeNotFound, got: {other:?}"),
@@ -369,6 +380,7 @@ fn no_panic_resolver_returns_error() {
     let opts = kafel::CompileOptions::new().with_include_resolver(|name, _ctx| {
         Err(kafel::Error::IncludeNotFound {
             filename: name.to_string(),
+            span: None,
         })
     });
 
@@ -377,7 +389,7 @@ fn no_panic_resolver_returns_error() {
         &opts,
     );
     match result {
-        Err(kafel::Error::IncludeNotFound { filename }) => {
+        Err(kafel::Error::IncludeNotFound { filename, .. }) => {
             assert_eq!(filename, "any.policy");
         }
         other => panic!("expected IncludeNotFound, got: {:?}", other.map(|_| "Ok")),

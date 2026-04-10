@@ -35,6 +35,7 @@ impl ExprBuf {
         if from <= to {
             return Err(Error::Codegen {
                 message: format!("forward jump in reversed buffer: from={from} to={to}"),
+                span: None,
             });
         }
         let offset = from - to - 1;
@@ -43,6 +44,7 @@ impl ExprBuf {
                 message: format!(
                     "expression too complex: jump offset {offset} exceeds maximum 255"
                 ),
+                span: None,
             });
         }
         Ok(offset as u8)
@@ -163,6 +165,7 @@ fn generate_comparison(
             }
             return Err(Error::Codegen {
                 message: "both operands are constant but not folded".into(),
+                span: None,
             });
         }
         _ => return Ok(floc),
@@ -297,9 +300,11 @@ fn generate_masked_compare(
 ) -> Result<Loc, Error> {
     let mask_val = const_value(mask).ok_or_else(|| Error::Codegen {
         message: "masked comparison mask is not a constant".into(),
+        span: None,
     })?;
     let rhs_val = const_value(rhs).ok_or_else(|| Error::Codegen {
         message: "masked comparison RHS is not a constant".into(),
+        span: None,
     })?;
 
     if rhs_val == 0 && (op == CmpOp::Eq || op == CmpOp::Ne) && !needs_64bit(mask_val) {

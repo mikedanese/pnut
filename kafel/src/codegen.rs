@@ -266,6 +266,7 @@ impl CompileOptions {
     ///             .map(Into::into)
     ///             .ok_or_else(|| Error::IncludeNotFound {
     ///                 filename: name.to_string(),
+    ///                 span: None,
     ///             })
     ///     });
     /// ```

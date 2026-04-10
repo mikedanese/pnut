@@ -25,7 +25,7 @@ fn include_without_resolver_errors() {
         None,
     );
     assert!(
-        matches!(result, Err(Error::IncludeNotFound { ref filename }) if filename == "missing.policy"),
+        matches!(result, Err(Error::IncludeNotFound { ref filename, .. }) if filename == "missing.policy"),
         "expected IncludeNotFound, got {result:?}"
     );
 }
@@ -42,6 +42,7 @@ fn self_include_detected() {
             .into()),
         _ => Err(Error::IncludeNotFound {
             filename: name.to_string(),
+            span: None,
         }),
     });
     let mut seen = HashSet::new();
@@ -70,6 +71,7 @@ fn three_way_circular_include() {
         "c.policy" => Ok("#include \"a.policy\"".to_string().into()),
         _ => Err(Error::IncludeNotFound {
             filename: name.to_string(),
+            span: None,
         }),
     });
     let mut seen = HashSet::new();
@@ -122,6 +124,7 @@ fn include_chain_at_exact_depth_limit() {
             "c.policy" => Ok("POLICY leaf { ALLOW { read } }".to_string().into()),
             _ => Err(Error::IncludeNotFound {
                 filename: name.to_string(),
+                span: None,
             }),
         });
     let mut seen = HashSet::new();
@@ -148,6 +151,7 @@ fn include_chain_one_past_depth_limit() {
             "c.policy" => Ok("POLICY leaf { ALLOW { read } }".to_string().into()),
             _ => Err(Error::IncludeNotFound {
                 filename: name.to_string(),
+                span: None,
             }),
         });
     let mut seen = HashSet::new();
@@ -196,6 +200,7 @@ fn included_defines_merge_into_main() {
         "consts.policy" => Ok("#define MY_FD 42".to_string().into()),
         _ => Err(Error::IncludeNotFound {
             filename: name.to_string(),
+            span: None,
         }),
     });
     let mut seen = HashSet::new();
@@ -223,6 +228,7 @@ fn included_policies_available_for_use() {
             .into()),
         _ => Err(Error::IncludeNotFound {
             filename: name.to_string(),
+            span: None,
         }),
     });
     let mut seen = HashSet::new();

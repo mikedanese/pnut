@@ -1,16 +1,44 @@
 //! AST data types for the seccomp policy DSL.
 
+/// A byte-offset span into the original policy source text.
+///
+/// Used to attach source locations to AST nodes so that downstream error
+/// messages can point at the offending identifier. `start` is inclusive,
+/// `end` is exclusive. Both are byte offsets, not character indices.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Span {
+    pub start: u32,
+    pub end: u32,
+}
+
+impl Span {
+    pub const fn new(start: u32, end: u32) -> Self {
+        Self { start, end }
+    }
+}
+
 /// A parsed seccomp policy file.
 #[derive(Debug, Default)]
 pub struct PolicyFile {
-    /// `#include` directives (filenames to resolve).
-    pub(crate) include_directives: Vec<String>,
+    /// `#include` directives to resolve.
+    pub(crate) includes: Vec<Include>,
     /// `#define` constants (name -> value).
     pub(crate) defines: Vec<(String, Expr)>,
     /// Named policies.
     pub(crate) policies: Vec<Policy>,
     /// Top-level `USE ... DEFAULT ...` statement.
     pub(crate) use_stmt: Option<UseStmt>,
+}
+
+/// A parsed `#include "filename"` directive.
+#[derive(Debug)]
+pub(crate) struct Include {
+    /// The filename as written in the directive, with surrounding quotes
+    /// stripped.
+    pub(crate) filename: String,
+    /// Source span of the entire directive (from `#include` through the
+    /// closing quote), used to locate include-resolution errors.
+    pub(crate) span: Span,
 }
 
 impl PolicyFile {
@@ -44,7 +72,9 @@ pub(crate) struct Policy {
 #[derive(Debug)]
 pub(crate) enum PolicyEntry {
     ActionBlock(ActionBlock),
-    UseRef(String),
+    /// `USE other_policy` — carries the span of the referenced name so
+    /// diagnostics can point at it.
+    UseRef(String, Span),
 }
 
 /// An action block mapping an action to a set of syscall rules.
@@ -72,6 +102,8 @@ pub(crate) enum Action {
 pub(crate) struct SyscallRule {
     /// Syscall name (e.g., "write", "mmap").
     pub(crate) name: String,
+    /// Source span of the syscall name (for "unknown syscall" diagnostics).
+    pub(crate) name_span: Span,
     /// Named arguments, if declared (e.g., ["fd", "buf", "count"]).
     pub(crate) args: Vec<String>,
     /// Optional boolean filter on arguments.
@@ -97,10 +129,10 @@ pub(crate) enum BoolExpr {
 /// Left-hand side of a comparison.
 #[derive(Debug)]
 pub(crate) enum CmpLhs {
-    /// Plain argument name.
-    Arg(String),
-    /// Masked argument: (arg & mask).
-    Masked(String, Expr),
+    /// Plain argument name with its source span.
+    Arg(String, Span),
+    /// Masked argument: (arg & mask). Span covers the arg name.
+    Masked(String, Span, Expr),
 }
 
 /// Comparison operator.
@@ -119,8 +151,8 @@ pub enum CmpOp {
 pub(crate) enum Expr {
     /// Integer literal.
     Number(u64),
-    /// Identifier (argument name or #define constant).
-    Ident(String),
+    /// Identifier (argument name or #define constant), with source span.
+    Ident(String, Span),
     /// Bitwise OR of sub-expressions: `O_RDWR | O_CREAT`.
     BitOr(Vec<Expr>),
 }
@@ -128,6 +160,7 @@ pub(crate) enum Expr {
 /// Top-level `USE policy1, policy2 DEFAULT action` statement.
 #[derive(Debug)]
 pub(crate) struct UseStmt {
-    pub(crate) policies: Vec<String>,
+    /// Policy names with their source spans.
+    pub(crate) policies: Vec<(String, Span)>,
     pub(crate) default_action: Action,
 }

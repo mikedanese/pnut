@@ -41,6 +41,7 @@
 //!             .map(Into::into)
 //!             .ok_or_else(|| Error::IncludeNotFound {
 //!                 filename: name.to_string(),
+//!                 span: None,
 //!             })
 //!     });
 //!
@@ -79,11 +80,11 @@ mod tests;
 /// builtin policy definitions available to `USE` in any compiled policy.
 pub const BUILTIN_PRELUDE: &str = include_str!("prelude.policy");
 
-pub use ast::CmpOp;
+pub use ast::{CmpOp, Span};
 pub use codegen::{
     BpfProgram, CompileOptions, IncludeContext, IncludeResult, compile, compile_with_options,
     install_filter, parse_policy,
 };
-pub use error::Error;
+pub use error::{Error, render_diagnostic};
 pub use resolve::{Action, Expr, Policy, PolicyEntry, resolve_syscall};
 pub use resolver::FilesystemResolver;

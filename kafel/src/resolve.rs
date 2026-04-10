@@ -12,7 +12,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::ast::{
     Action as AstAction, ActionBlock, BoolExpr, CmpLhs, CmpOp, Expr as AstExpr,
-    PolicyEntry as AstPolicyEntry, PolicyFile,
+    PolicyEntry as AstPolicyEntry, PolicyFile, Span,
 };
 use crate::error::Error;
 
@@ -443,6 +443,7 @@ pub fn resolve_syscall(name: &str) -> Result<u32, Error> {
         _ => {
             return Err(Error::UnknownSyscall {
                 name: name.to_string(),
+                span: None,
             });
         }
     };
@@ -506,12 +507,15 @@ impl<'a> Resolver<'a> {
     ) -> Result<u64, Error> {
         match expr {
             AstExpr::Number(n) => Ok(*n),
-            AstExpr::Ident(name) => {
+            AstExpr::Ident(name, span) => {
                 if let Some(&val) = resolved.get(name.as_str()) {
                     return Ok(val);
                 }
                 if in_progress.contains(name.as_str()) {
-                    return Err(Error::UndefinedIdentifier { name: name.clone() });
+                    return Err(Error::UndefinedIdentifier {
+                        name: name.clone(),
+                        span: Some(*span),
+                    });
                 }
                 if let Some(def_expr) = raw_defines.get(name.as_str()) {
                     in_progress.insert(name.as_str());
@@ -521,7 +525,10 @@ impl<'a> Resolver<'a> {
                     resolved.insert(name.as_str(), val);
                     Ok(val)
                 } else {
-                    Err(Error::UndefinedIdentifier { name: name.clone() })
+                    Err(Error::UndefinedIdentifier {
+                        name: name.clone(),
+                        span: Some(*span),
+                    })
                 }
             }
             AstExpr::BitOr(parts) => {
@@ -539,7 +546,7 @@ impl<'a> Resolver<'a> {
     fn resolve_expr(&self, expr: &AstExpr, arg_map: &HashMap<&str, u8>) -> Result<Expr, Error> {
         match expr {
             AstExpr::Number(n) => Ok(Expr::Constant(*n)),
-            AstExpr::Ident(name) => {
+            AstExpr::Ident(name, span) => {
                 // First check if it's a #define constant
                 if let Some(&val) = self.defines.get(name.as_str()) {
                     return Ok(Expr::Constant(val));
@@ -548,7 +555,10 @@ impl<'a> Resolver<'a> {
                 if let Some(&idx) = arg_map.get(name.as_str()) {
                     return Ok(Expr::Arg(idx));
                 }
-                Err(Error::UndefinedIdentifier { name: name.clone() })
+                Err(Error::UndefinedIdentifier {
+                    name: name.clone(),
+                    span: Some(*span),
+                })
             }
             AstExpr::BitOr(parts) => {
                 let resolved: Vec<Expr> = parts
@@ -582,7 +592,7 @@ impl<'a> Resolver<'a> {
             BoolExpr::Compare(lhs, op, rhs) => {
                 let resolved_rhs = self.resolve_expr(rhs, arg_map)?;
                 match lhs {
-                    CmpLhs::Arg(name) => {
+                    CmpLhs::Arg(name, span) => {
                         // Check if it's an argument
                         if let Some(&idx) = arg_map.get(name.as_str()) {
                             let resolved_lhs = Expr::Arg(idx);
@@ -596,14 +606,16 @@ impl<'a> Resolver<'a> {
                             Err(Error::UndeclaredArgument {
                                 name: name.clone(),
                                 syscall: syscall_name.to_string(),
+                                span: Some(*span),
                             })
                         }
                     }
-                    CmpLhs::Masked(name, mask) => {
+                    CmpLhs::Masked(name, span, mask) => {
                         let idx = arg_map.get(name.as_str()).copied().ok_or_else(|| {
                             Error::UndeclaredArgument {
                                 name: name.clone(),
                                 syscall: syscall_name.to_string(),
+                                span: Some(*span),
                             }
                         })?;
                         let resolved_mask = self.resolve_expr(mask, arg_map)?;
@@ -637,10 +649,15 @@ impl<'a> Resolver<'a> {
     fn resolve_action_value(&self, expr: &AstExpr) -> Result<u32, Error> {
         let value = match expr {
             AstExpr::Number(n) => *n,
-            AstExpr::Ident(name) => *self
-                .defines
-                .get(name.as_str())
-                .ok_or_else(|| Error::UndefinedIdentifier { name: name.clone() })?,
+            AstExpr::Ident(name, span) => {
+                *self
+                    .defines
+                    .get(name.as_str())
+                    .ok_or_else(|| Error::UndefinedIdentifier {
+                        name: name.clone(),
+                        span: Some(*span),
+                    })?
+            }
             AstExpr::BitOr(parts) => {
                 let mut result = 0u64;
                 for part in parts {
@@ -668,15 +685,21 @@ impl<'a> Resolver<'a> {
 
     /// Flatten a policy by name, recursively expanding USE references.
     /// Returns a list of (action_block) entries with all USE refs inlined.
+    ///
+    /// `ref_span` is the source span of the `USE` that brought us here, used
+    /// to attach a location to `CircularUse` / `UndefinedPolicy` errors. It
+    /// is `None` for the top-level entry into `resolve`.
     fn flatten_policy(
         &self,
         policy_name: &str,
+        ref_span: Option<Span>,
         visiting: &mut HashSet<String>,
         entries: &mut Vec<(Action, Vec<PolicyEntry>)>,
     ) -> Result<(), Error> {
         if !visiting.insert(policy_name.to_string()) {
             return Err(Error::CircularUse {
                 policy: policy_name.to_string(),
+                span: ref_span,
             });
         }
 
@@ -685,6 +708,7 @@ impl<'a> Resolver<'a> {
             .get(policy_name)
             .ok_or_else(|| Error::UndefinedPolicy {
                 name: policy_name.to_string(),
+                span: ref_span,
             })?;
         let policy = &self.policy_file.policies[*idx];
 
@@ -695,8 +719,8 @@ impl<'a> Resolver<'a> {
                     let resolved_rules = self.resolve_action_block(block, &action)?;
                     entries.push((action, resolved_rules));
                 }
-                AstPolicyEntry::UseRef(ref_name) => {
-                    self.flatten_policy(ref_name, visiting, entries)?;
+                AstPolicyEntry::UseRef(ref_name, span) => {
+                    self.flatten_policy(ref_name, Some(*span), visiting, entries)?;
                 }
             }
         }
@@ -713,7 +737,13 @@ impl<'a> Resolver<'a> {
     ) -> Result<Vec<PolicyEntry>, Error> {
         let mut resolved = Vec::new();
         for rule in &block.rules {
-            let syscall_number = resolve_syscall(&rule.name)?;
+            let syscall_number = resolve_syscall(&rule.name).map_err(|e| match e {
+                Error::UnknownSyscall { name, .. } => Error::UnknownSyscall {
+                    name,
+                    span: Some(rule.name_span),
+                },
+                other => other,
+            })?;
 
             // Build argument name -> index map
             let arg_map: HashMap<&str, u8> = rule
@@ -805,6 +835,7 @@ pub fn resolve(policy_file: &PolicyFile) -> Result<Policy, Error> {
 
     let use_stmt = policy_file.use_stmt.as_ref().ok_or_else(|| Error::Parse {
         message: "no top-level USE statement found".to_string(),
+        span: None,
     })?;
 
     let default_action = resolver.resolve_action(&use_stmt.default_action)?;
@@ -812,9 +843,14 @@ pub fn resolve(policy_file: &PolicyFile) -> Result<Policy, Error> {
     let mut all_entries = Vec::new();
     let mut visiting = HashSet::new();
 
-    for policy_name in &use_stmt.policies {
+    for (policy_name, policy_span) in &use_stmt.policies {
         let mut policy_entries = Vec::new();
-        resolver.flatten_policy(policy_name, &mut visiting, &mut policy_entries)?;
+        resolver.flatten_policy(
+            policy_name,
+            Some(*policy_span),
+            &mut visiting,
+            &mut policy_entries,
+        )?;
         for (_action, rules) in policy_entries {
             all_entries.extend(rules);
         }
@@ -921,7 +957,7 @@ mod tests {
         "#;
         let err = parse_and_resolve(input).unwrap_err();
         match &err {
-            Error::UnknownSyscall { name } => {
+            Error::UnknownSyscall { name, .. } => {
                 assert_eq!(name, "not_a_real_syscall");
             }
             other => panic!("expected UnknownSyscall, got {other}"),
@@ -944,7 +980,7 @@ mod tests {
         "#;
         let err = parse_and_resolve(input).unwrap_err();
         match &err {
-            Error::CircularUse { policy } => {
+            Error::CircularUse { policy, .. } => {
                 assert_eq!(policy, "a");
             }
             other => panic!("expected CircularUse, got {other}"),
@@ -997,7 +1033,7 @@ mod tests {
         "#;
         let err = parse_and_resolve(input).unwrap_err();
         match &err {
-            Error::UndeclaredArgument { name, syscall } => {
+            Error::UndeclaredArgument { name, syscall, .. } => {
                 assert_eq!(name, "flags");
                 assert_eq!(syscall, "write");
             }
@@ -1272,22 +1308,28 @@ mod tests {
         let errors = vec![
             Error::Parse {
                 message: "unexpected token at 1:5".to_string(),
+                span: None,
             },
             Error::UnknownSyscall {
                 name: "fake_syscall".to_string(),
+                span: None,
             },
             Error::UndefinedIdentifier {
                 name: "UNKNOWN".to_string(),
+                span: None,
             },
             Error::UndeclaredArgument {
                 name: "flags".to_string(),
                 syscall: "write".to_string(),
+                span: None,
             },
             Error::CircularUse {
                 policy: "a".to_string(),
+                span: None,
             },
             Error::UndefinedPolicy {
                 name: "missing".to_string(),
+                span: None,
             },
         ];
         for err in &errors {

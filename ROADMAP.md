@@ -4,6 +4,11 @@ What's next for pnut, roughly in priority order.
 
 ## Done (recent)
 
+- **Seccomp diagnostic rendering** — kafel errors now carry byte-offset spans
+  threaded from pest through the AST and resolver. `kafel::render_diagnostic`
+  produces rustc-style output with `--> file:line:col`, a source snippet, and
+  a caret under the offending token. Wired into pnut's seccomp compile path
+  so CLI users see exactly where a broken policy went wrong.
 - **New mount API** — `fsopen`/`fsconfig`/`fsmount`/`move_mount`/`open_tree`/
   `mount_setattr` for fd-based VFS construction. Eliminates TOCTOU races,
   provides atomic flag application, and fd-relative tree construction.
@@ -46,8 +51,6 @@ What's next for pnut, roughly in priority order.
 
 ### Usability
 
-- **Seccomp policy usability** — better error messages when a policy fails to
-  compile, with source location and context.
 - **High-level path access declarations** — a single directive like
   `allow_read = ["/data"]` that auto-configures bind mount + Landlock allowlist.
 - **Testing on more kernels** — CI coverage across kernel versions (5.11,

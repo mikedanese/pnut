@@ -37,6 +37,7 @@ fn default_options() {
 fn error_impls_display_and_error() {
     let err = kafel::Error::Parse {
         message: "test".to_string(),
+        span: None,
     };
     // Display and Error traits are implemented
     let msg = format!("{err}");
@@ -68,9 +69,11 @@ fn public_api_types() {
     let _e = kafel::Error::IncludeDepthExceeded;
     let _e = kafel::Error::CircularInclude {
         filename: "test".to_string(),
+        span: None,
     };
     let _e = kafel::Error::IncludeNotFound {
         filename: "test".to_string(),
+        span: None,
     };
 }
 

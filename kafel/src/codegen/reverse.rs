@@ -249,6 +249,7 @@ impl ReverseCodegen {
         if ranges.is_empty() {
             return Err(Error::Codegen {
                 message: "no syscall ranges to generate".into(),
+                span: None,
             });
         }
 
@@ -290,6 +291,7 @@ impl ReverseCodegen {
         if buf.is_empty() || buf.last().unwrap().nr != 0 {
             return Err(Error::Codegen {
                 message: "range tree does not cover syscall 0".into(),
+                span: None,
             });
         }
 
@@ -342,6 +344,7 @@ impl ReverseCodegen {
                     self.buffer.len(),
                     u16::MAX
                 ),
+                span: None,
             });
         }
 
