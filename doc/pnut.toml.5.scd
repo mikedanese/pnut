@@ -152,15 +152,16 @@ Mount procfs with hardened defaults.
 	Destination path inside the sandbox. *Required*.
 
 *proc_subset* (string)
-	The *subset=* mount option. Valid values: *"pid"*.
-	When set to *"pid"* (default), only PID-related entries are visible;
-	*/proc/sys*, */proc/kallsyms*, */proc/net*, etc. are hidden.
-	Set to *null* to mount full proc. Requires kernel >= 5.8.
+	The *subset=* mount option. Valid values: *"pid"* (default) or *"none"*.
+	When set to *"pid"*, only PID-related entries are visible; */proc/sys*,
+	*/proc/kallsyms*, */proc/net*, etc. are hidden. Set to *"none"* to mount
+	full proc (no subset restriction). Requires kernel >= 5.8.
 
 *hidepid* (string)
 	The *hidepid=* mount option. Valid values: *"invisible"* (default),
-	*"hidden"*, *"visible"*, or numeric *"0"*, *"1"*, *"2"*. Controls
-	visibility of other processes' */proc/<pid>* directories.
+	*"hidden"*, *"visible"*, numeric *"0"*, *"1"*, *"2"*, or *"none"* to
+	leave the option unset. Controls visibility of other processes'
+	*/proc/<pid>* directories.
 
 *type = "mqueue"*
 

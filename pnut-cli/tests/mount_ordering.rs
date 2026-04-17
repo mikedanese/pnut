@@ -1,6 +1,5 @@
-//! Regression test: user `[[mount]]` entries targeting `/dev/*` must survive
-//! `setup_dev`, which lays down a managed tmpfs on `/dev` before user mounts
-//! are applied.
+//! Regression tests for mount ordering and proc options. See per-test docs
+//! for the specific invariant each one guards.
 use std::process::Command;
 
 fn pnut() -> Command {
@@ -102,5 +101,54 @@ type = "bind"
         out.status.success(),
         "user /dev/* bind was shadowed or not a char device. stderr: {}",
         String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+/// `proc_subset = "none"` must expose entries like `/proc/sys` that the
+/// default `subset=pid` hides.
+#[test]
+fn proc_subset_none_exposes_full_proc() {
+    let config = format!(
+        r#"{base}
+[[mount]]
+type = "proc"
+dst = "/proc"
+proc_subset = "none"
+hidepid = "none"
+"#,
+        base = base_config(),
+    );
+
+    let out = pnut_with_config(&config)
+        .args(["--", "/bin/sh", "-c", "test -d /proc/sys"])
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "proc_subset = \"none\" did not expose /proc/sys. stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+/// Default proc mount (no overrides) should still hide `/proc/sys` via
+/// `subset=pid`. Guards against accidentally flipping the default.
+#[test]
+fn proc_default_subset_hides_sys() {
+    let config = format!(
+        r#"{base}
+[[mount]]
+type = "proc"
+dst = "/proc"
+"#,
+        base = base_config(),
+    );
+
+    let out = pnut_with_config(&config)
+        .args(["--", "/bin/sh", "-c", "test -d /proc/sys"])
+        .output()
+        .unwrap();
+    assert!(
+        !out.status.success(),
+        "default proc mount unexpectedly exposes /proc/sys (subset=pid not applied)"
     );
 }

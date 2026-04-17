@@ -5,7 +5,7 @@
 .nh
 .ad l
 .\" Begin generated content:
-.TH "pnut.toml" "5" "2026-04-10"
+.TH "pnut.toml" "5" "2026-04-17"
 .P
 .SH NAME
 .P
@@ -218,17 +218,18 @@ Destination path inside the sandbox.\& \fBRequired\fR.\&
 .RE
 \fBproc_subset\fR (string)
 .RS 4
-The \fBsubset=\fR mount option.\& Valid values: \fB"pid"\fR.\&
-When set to \fB"pid"\fR (default), only PID-related entries are visible;
-\fB/proc/sys\fR, \fB/proc/kallsyms\fR, \fB/proc/net\fR, etc.\& are hidden.\&
-Set to \fBnull\fR to mount full proc.\& Requires kernel >= 5.\&8.\&
+The \fBsubset=\fR mount option.\& Valid values: \fB"pid"\fR (default) or \fB"none"\fR.\&
+When set to \fB"pid"\fR, only PID-related entries are visible; \fB/proc/sys\fR,
+\fB/proc/kallsyms\fR, \fB/proc/net\fR, etc.\& are hidden.\& Set to \fB"none"\fR to mount
+full proc (no subset restriction).\& Requires kernel >= 5.\&8.\&
 .P
 .RE
 \fBhidepid\fR (string)
 .RS 4
 The \fBhidepid=\fR mount option.\& Valid values: \fB"invisible"\fR (default),
-\fB"hidden"\fR, \fB"visible"\fR, or numeric \fB"0"\fR, \fB"1"\fR, \fB"2"\fR.\& Controls
-visibility of other processes'\& \fB/proc/<pid>\fR directories.\&
+\fB"hidden"\fR, \fB"visible"\fR, numeric \fB"0"\fR, \fB"1"\fR, \fB"2"\fR, or \fB"none"\fR to
+leave the option unset.\& Controls visibility of other processes'\&
+\fB/proc/<pid>\fR directories.\&
 .P
 .RE
 \fBtype = "mqueue"\fR

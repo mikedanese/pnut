@@ -63,7 +63,7 @@ type = "bind"
 # Mount proc filesystem.
 # proc_subset defaults to "pid" (hides /proc/sys, /proc/net, etc.)
 # hidepid defaults to "invisible" (hides other processes' /proc/<pid>)
-# Set to null to disable: proc_subset = null, hidepid = null
+# Set to "none" to disable: proc_subset = "none", hidepid = "none"
 [[mount]]
 dst = "/proc"
 type = "proc"

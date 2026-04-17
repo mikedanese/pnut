@@ -8,6 +8,11 @@ What's next for pnut, roughly in priority order.
   before the user mount loop so bind-mounts under `/dev` (e.g. `/dev/nvidia0`
   for CUDA) land on top of the managed `/dev` tmpfs instead of being silently
   shadowed by it.
+- **`proc_subset = "none"` / `hidepid = "none"`** — both config fields now
+  accept `"none"` as an explicit opt-out, letting users mount full `/proc`
+  (for e.g. `/proc/driver/nvidia`) without bind-mounting host `/proc`. The
+  misleading `null` reference in `examples/full.toml` and `pnut.toml(5)` is
+  fixed.
 - **Seccomp diagnostic rendering** — kafel errors now carry byte-offset spans
   threaded from pest through the AST and resolver. `kafel::render_diagnostic`
   produces rustc-style output with `--> file:line:col`, a source snippet, and

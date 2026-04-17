@@ -157,51 +157,49 @@ impl Default for Namespaces {
     }
 }
 
-#[derive(Debug, Clone, Copy, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, Deserialize)]
 #[serde(rename_all = "lowercase")]
 enum ProcSubsetConfig {
+    #[default]
     Pid,
+    None,
 }
 
-impl From<ProcSubsetConfig> for pnut::ProcSubset {
+impl From<ProcSubsetConfig> for Option<pnut::ProcSubset> {
     fn from(c: ProcSubsetConfig) -> Self {
         match c {
-            ProcSubsetConfig::Pid => Self::Pid,
+            ProcSubsetConfig::Pid => Some(pnut::ProcSubset::Pid),
+            ProcSubsetConfig::None => None,
         }
     }
 }
 
-#[derive(Debug, Clone, Copy, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, Deserialize)]
 #[serde(rename_all = "lowercase")]
 enum HidePidConfig {
     #[serde(alias = "0")]
     Visible,
     #[serde(alias = "1")]
     Hidden,
+    #[default]
     #[serde(alias = "2")]
     Invisible,
+    None,
 }
 
-impl From<HidePidConfig> for pnut::HidePid {
+impl From<HidePidConfig> for Option<pnut::HidePid> {
     fn from(c: HidePidConfig) -> Self {
         match c {
-            HidePidConfig::Visible => Self::Visible,
-            HidePidConfig::Hidden => Self::Hidden,
-            HidePidConfig::Invisible => Self::Invisible,
+            HidePidConfig::Visible => Some(pnut::HidePid::Visible),
+            HidePidConfig::Hidden => Some(pnut::HidePid::Hidden),
+            HidePidConfig::Invisible => Some(pnut::HidePid::Invisible),
+            HidePidConfig::None => None,
         }
     }
 }
 
-fn default_proc_subset() -> Option<ProcSubsetConfig> {
-    Some(ProcSubsetConfig::Pid)
-}
-
-fn default_hidepid() -> Option<HidePidConfig> {
-    Some(HidePidConfig::Invisible)
-}
-
 #[derive(Debug, Deserialize)]
-#[serde(tag = "type", rename_all = "lowercase")]
+#[serde(tag = "type", rename_all = "lowercase", deny_unknown_fields)]
 enum MountEntryConfig {
     Bind {
         src: String,
@@ -220,10 +218,10 @@ enum MountEntryConfig {
     },
     Proc {
         dst: String,
-        #[serde(default = "default_proc_subset")]
-        proc_subset: Option<ProcSubsetConfig>,
-        #[serde(default = "default_hidepid")]
-        hidepid: Option<HidePidConfig>,
+        #[serde(default)]
+        proc_subset: ProcSubsetConfig,
+        #[serde(default)]
+        hidepid: HidePidConfig,
     },
     Mqueue {
         dst: String,
@@ -265,8 +263,8 @@ impl From<MountEntryConfig> for pnut::MountEntry {
                 hidepid,
             } => Self::Proc {
                 dst,
-                subset: proc_subset.map(Into::into),
-                hidepid: hidepid.map(Into::into),
+                subset: proc_subset.into(),
+                hidepid: hidepid.into(),
             },
             MountEntryConfig::Mqueue { dst } => Self::Mqueue { dst },
             MountEntryConfig::File {
